@@ -107,6 +107,39 @@ button{font:inherit;border:0;border-radius:11px;padding:11px 20px;font-weight:80
       </div>
     </footer>
   </section>
+
+  <section id="fuelSection" class="hidden">
+    <header class="top">
+      <div class="badge" id="fuelTitle">اولویت‌بندی بر اساس قیمت بنزین</div>
+      <div class="progress"><div id="fuelProgress"></div></div>
+      <div class="counter" id="fuelCounter">۱ از ۵</div>
+    </header>
+    <div class="instruction">
+      در این بخش، با فرض قیمت بنزین درج‌شده در جدول، اولویت خود را برای انتخاب هر یک از شش شیوه سفر مشخص کنید.
+      اولویت ۱ به معنی بیشترین ترجیح و اولویت ۶ به معنی کمترین ترجیح است. هر عدد باید فقط یک بار استفاده شود.
+    </div>
+    <div class="card" style="padding:16px;margin-bottom:18px">
+      <h2 id="fuelHeading" style="margin:0 0 12px;color:var(--navy);text-align:center">قیمت بنزین لیتری ۵٬۰۰۰ تومان</h2>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:320px">
+          <thead><tr style="background:#eaf2ff">
+            <th style="padding:12px;text-align:right;border-bottom:1px solid var(--line)">شیوه سفر</th>
+            <th style="padding:12px;text-align:center;border-bottom:1px solid var(--line);width:42%">اولویت (۱ تا ۶)</th>
+          </tr></thead>
+          <tbody id="fuelRows"></tbody>
+        </table>
+      </div>
+    </div>
+    <footer class="actions">
+      <button class="clear" id="fuelClearBtn" type="button">پاک کردن انتخاب‌ها</button>
+      <div class="status" id="fuelStatus">۰ از ۶ اولویت انتخاب شده<small>برای ادامه، هر شش گزینه را رتبه‌بندی کنید.</small></div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap">
+        <button class="secondary" id="fuelPrevBtn" type="button">مرحله قبلی</button>
+        <button class="primary" id="fuelNextBtn" type="button" disabled>قیمت بعدی</button>
+      </div>
+    </footer>
+  </section>
+
   <section id="complete" class="done hidden">
     <h2>پاسخ‌گویی به پرسشنامه پایان یافت</h2>
     <p>از مشارکت شما سپاسگزاریم. برای ثبت پاسخ‌ها در پایگاه داده پژوهش، روی دکمه زیر کلیک کنید.</p>
@@ -185,7 +218,91 @@ document.getElementById("clearBtn").onclick=()=>{
 document.getElementById("prevBtn").onclick=()=>{if(current>0){current--;render();window.scrollTo({top:0,behavior:"smooth"});}};
 document.getElementById("nextBtn").onclick=()=>{
   if(current<DATA.length-1){current++;render();window.scrollTo({top:0,behavior:"smooth"});}
-  else {document.getElementById("survey").classList.add("hidden");document.getElementById("complete").classList.remove("hidden");}
+  else {showFuelSection();}
+};
+
+// بخش رتبه‌بندی ترجیحات در قیمت‌های مختلف بنزین
+const FUEL_PRICES = [5000, 10000, 20000, 40000, 80000];
+const MODE_LIST = [
+  ["Private car", "خودروی شخصی"],
+  ["Motorcycle", "موتورسیکلت"],
+  ["Public transport", "حمل‌ونقل عمومی"],
+  ["Taxi", "تاکسی"],
+  ["Ride-hailing", "اسنپ"],
+  ["Shared ride-hailing", "اسنپ اشتراکی"]
+];
+let fuelCurrent = 0;
+let fuelPreferences = JSON.parse(localStorage.getItem("transportSurveyFuelPreferences") || "{}");
+function saveFuel(){ localStorage.setItem("transportSurveyFuelPreferences", JSON.stringify(fuelPreferences)); }
+function showFuelSection(){
+  document.getElementById("survey").classList.add("hidden");
+  document.getElementById("complete").classList.add("hidden");
+  document.getElementById("fuelSection").classList.remove("hidden");
+  fuelCurrent = 0;
+  renderFuel();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+function renderFuel(){
+  const price = FUEL_PRICES[fuelCurrent];
+  document.getElementById("fuelHeading").textContent = `قیمت بنزین لیتری ${faDigits(price.toLocaleString("en-US"))} تومان`;
+  document.getElementById("fuelCounter").textContent = `${faDigits(fuelCurrent+1)} از ${faDigits(FUEL_PRICES.length)}`;
+  document.getElementById("fuelProgress").style.width = `${((fuelCurrent+1)/FUEL_PRICES.length)*100}%`;
+  document.getElementById("fuelPrevBtn").textContent = fuelCurrent===0 ? "بازگشت به سناریوها" : "قیمت قبلی";
+  document.getElementById("fuelNextBtn").textContent = fuelCurrent===FUEL_PRICES.length-1 ? "پایان و ثبت پاسخ‌ها" : "قیمت بعدی";
+  const saved = fuelPreferences[String(price)] || {};
+  const tbody = document.getElementById("fuelRows");
+  tbody.innerHTML = "";
+  MODE_LIST.forEach(([mode, modeFa])=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td style="padding:12px;border-bottom:1px solid #edf1f6;font-weight:700">${modeFa}</td>
+      <td style="padding:8px;border-bottom:1px solid #edf1f6"><select aria-label="اولویت ${modeFa}" data-mode="${mode}">
+      <option value="">انتخاب اولویت</option>${[1,2,3,4,5,6].map(n=>`<option value="${n}">${faDigits(n)}</option>`).join("")}</select></td>`;
+    tbody.appendChild(tr);
+    const select = tr.querySelector("select");
+    select.value = saved[mode] || "";
+    select.addEventListener("change", e=>{
+      if(!fuelPreferences[String(price)]) fuelPreferences[String(price)] = {};
+      const value = e.target.value;
+      const conflict = value && Object.entries(fuelPreferences[String(price)]).find(([m,v])=>m!==mode && String(v)===value);
+      if(conflict){
+        alert(`اولویت ${faDigits(value)} قبلاً برای «${MODE_LIST.find(x=>x[0]===conflict[0])[1]}» انتخاب شده است.`);
+        e.target.value = saved[mode] || "";
+        return;
+      }
+      if(value) fuelPreferences[String(price)][mode] = Number(value);
+      else delete fuelPreferences[String(price)][mode];
+      saveFuel(); updateFuelStatus();
+    });
+  });
+  updateFuelStatus();
+}
+function updateFuelStatus(){
+  const price = FUEL_PRICES[fuelCurrent];
+  const selected = fuelPreferences[String(price)] || {};
+  const count = Object.keys(selected).length;
+  document.getElementById("fuelStatus").innerHTML = `${faDigits(count)} از ۶ اولویت انتخاب شده<small>${count===6 ? "همه گزینه‌ها رتبه‌بندی شدند. می‌توانید ادامه دهید." : "برای ادامه، هر شش گزینه را رتبه‌بندی کنید."}</small>`;
+  document.getElementById("fuelNextBtn").disabled = count !== 6;
+}
+document.getElementById("fuelClearBtn").onclick=()=>{
+  if(confirm("همه انتخاب‌های این قیمت بنزین پاک شود؟")){
+    delete fuelPreferences[String(FUEL_PRICES[fuelCurrent])]; saveFuel(); renderFuel();
+  }
+};
+document.getElementById("fuelPrevBtn").onclick=()=>{
+  if(fuelCurrent>0){ fuelCurrent--; renderFuel(); window.scrollTo({top:0,behavior:"smooth"}); }
+  else {
+    document.getElementById("fuelSection").classList.add("hidden");
+    document.getElementById("survey").classList.remove("hidden");
+    current = DATA.length-1; render(); window.scrollTo({top:0,behavior:"smooth"});
+  }
+};
+document.getElementById("fuelNextBtn").onclick=()=>{
+  if(fuelCurrent<FUEL_PRICES.length-1){ fuelCurrent++; renderFuel(); window.scrollTo({top:0,behavior:"smooth"}); }
+  else {
+    document.getElementById("fuelSection").classList.add("hidden");
+    document.getElementById("complete").classList.remove("hidden");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
 };
 
 // اتصال پایگاه داده مرکزی (Supabase):
@@ -198,8 +315,9 @@ document.getElementById("submitBtn").onclick = async () => {
   const status = document.getElementById("submitStatus");
   const btn = document.getElementById("submitBtn");
   if (Object.keys(answers).length !== DATA.length ||
-      DATA.some((_,i)=>Object.keys(answers[i]||{}).length !== 6)) {
-    status.textContent = "ثبت پاسخ‌ها کامل نیست. لطفاً همه ۱۰ سناریو را بررسی کنید.";
+      DATA.some((_,i)=>Object.keys(answers[i]||{}).length !== 6) ||
+      FUEL_PRICES.some(price => Object.keys(fuelPreferences[String(price)]||{}).length !== 6)) {
+    status.textContent = "ثبت پاسخ‌ها کامل نیست. لطفاً ۱۰ سناریو و هر پنج جدول قیمت بنزین را تکمیل کنید.";
     return;
   }
   if (SUPABASE_URL.startsWith("YOUR_") || SUPABASE_ANON_KEY.startsWith("YOUR_")) {
@@ -226,6 +344,14 @@ document.getElementById("submitBtn").onclick = async () => {
             mode_fa: item.name,
             priority: Number((answers[i]||{})[item.mode])
           }))
+        })),
+        fuel_price_preferences: FUEL_PRICES.map(price => ({
+          fuel_price_toman: price,
+          rankings: MODE_LIST.map(([mode, mode_fa]) => ({
+            mode,
+            mode_fa,
+            priority: Number((fuelPreferences[String(price)]||{})[mode])
+          }))
         }))
       })
     });
@@ -248,9 +374,12 @@ document.getElementById("submitBtn").onclick = async () => {
 function csvEscape(v){return '"'+String(v??"").replace(/"/g,'""')+'"'}
 document.getElementById("downloadBtn").onclick=()=>{
   const participantName=document.getElementById("participantName").value.trim();
-  const rows=[["participant_name","scenario","mode_en","mode_fa","rank","cost_type","cost_toman","maintenance_toman","travel_time_min"]];
+  const rows=[["participant_name","section","scenario_or_fuel_price","mode_en","mode_fa","rank","cost_type","cost_toman","maintenance_toman","travel_time_min"]];
   DATA.forEach((s,i)=>s.items.forEach(item=>{
-    rows.push([participantName,s.scenario,item.mode,item.name,(answers[i]||{})[item.mode]||"",item.fuel!=null?"fuel":"fare",item.fuel??item.fare??"",item.maintenance??"",item.time]);
+    rows.push([participantName,"scenario",s.scenario,item.mode,item.name,(answers[i]||{})[item.mode]||"",item.fuel!=null?"fuel":"fare",item.fuel??item.fare??"",item.maintenance??"",item.time]);
+  }));
+  FUEL_PRICES.forEach(price=>MODE_LIST.forEach(([mode,modeFa])=>{
+    rows.push([participantName,"fuel_price_preference",price,mode,modeFa,(fuelPreferences[String(price)]||{})[mode]||"","","",""]);
   }));
   const csv="\uFEFF"+rows.map(r=>r.map(csvEscape).join(",")).join("\r\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
@@ -259,7 +388,7 @@ document.getElementById("downloadBtn").onclick=()=>{
 };
 document.getElementById("restartBtn").onclick=()=>{
   if(confirm("پاسخ‌های ذخیره‌شده در این مرورگر پاک و پرسشنامه از ابتدا شروع شود؟")){
-    answers={};current=0;save();document.getElementById("complete").classList.add("hidden");document.getElementById("intro").classList.remove("hidden");document.getElementById("profile").classList.add("hidden");document.getElementById("survey").classList.add("hidden");document.getElementById("participantName").value="";render();window.scrollTo({top:0,behavior:"smooth"});
+    answers={};current=0;fuelPreferences={};fuelCurrent=0;save();saveFuel();document.getElementById("complete").classList.add("hidden");document.getElementById("intro").classList.remove("hidden");document.getElementById("profile").classList.add("hidden");document.getElementById("survey").classList.add("hidden");document.getElementById("fuelSection").classList.add("hidden");document.getElementById("participantName").value="";render();window.scrollTo({top:0,behavior:"smooth"});
   }
 };
 document.getElementById("startBtn").addEventListener("click",()=>{
