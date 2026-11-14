@@ -47,6 +47,16 @@ button{font:inherit;border:0;border-radius:11px;padding:11px 20px;font-weight:80
 .profile-input{width:100%;max-width:520px;border:1px solid #cbd7e5;border-radius:12px;padding:13px 14px;font:inherit;color:var(--ink);background:#fff}
 .profile-input:focus{outline:3px solid #9fc5f2;outline-offset:2px}
 .profile-error{color:#b52f38;font-weight:700;font-size:.9rem}
+.interviewer-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 20px}
+.interviewer-option{display:flex;align-items:center;gap:10px;padding:13px 15px;border:1px solid #cbd7e5;border-radius:12px;background:#fff;font-weight:700;cursor:pointer}
+.interviewer-option input{width:19px;height:19px;accent-color:var(--blue)}
+.rank-table-wrap{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin:18px 0 20px}
+.rank-table{width:100%;border-collapse:collapse;text-align:right}
+.rank-table th{background:#eaf2ff;color:var(--navy);padding:13px 15px;font-size:.92rem}
+.rank-table td{padding:9px 12px;border-top:1px solid #edf1f6}
+.rank-table td:first-child{font-weight:700}
+.rank-table select{max-width:260px}
+@media(max-width:560px){.interviewer-list{grid-template-columns:1fr}.rank-table th,.rank-table td{padding:9px 8px}.rank-table select{min-width:145px;font-size:.85rem}}
 
 </style>
 </head>
@@ -80,12 +90,15 @@ button{font:inherit;border:0;border-radius:11px;padding:11px 20px;font-weight:80
 
   <section id="profile" class="intro-page hidden">
     <div class="intro-card profile-card">
-      <div class="intro-kicker">مشخصات پاسخ‌دهنده</div>
-      <h1>لطفاً مشخصات خود را وارد کنید</h1>
-      <p>نام و نام خانوادگی خود را وارد کنید. این اطلاعات همراه پاسخ‌های شما ذخیره خواهد شد.</p>
-      <label for="participantName" class="profile-label">نام و نام خانوادگی</label>
-      <input id="participantName" class="profile-input" type="text" autocomplete="name" maxlength="120" placeholder="مثلاً: علی رضایی" required>
-      <p id="profileError" class="profile-error hidden">لطفاً نام و نام خانوادگی را وارد کنید.</p>
+      <div class="intro-kicker">مشخصات پرسشگر</div>
+      <h1>لطفاً نام پرسشگر را انتخاب کنید</h1>
+      <p>لطفاً نام پرسشگر را انتخاب کنید.</p>
+      <div class="interviewer-list" role="radiogroup" aria-label="نام پرسشگر">
+        <label class="interviewer-option"><input type="radio" name="interviewerName" value="شیرولی"><span>شیرولی</span></label>
+        <label class="interviewer-option"><input type="radio" name="interviewerName" value="ناصر الملکی"><span>ناصر الملکی</span></label>
+        <label class="interviewer-option"><input type="radio" name="interviewerName" value="احمدی"><span>احمدی</span></label>
+      </div>
+      <p id="profileError" class="profile-error hidden">لطفاً نام پرسشگر را انتخاب کنید.</p>
       <button class="primary start-btn" id="beginScenariosBtn" type="button">ورود به سناریوها</button>
     </div>
   </section>
@@ -98,6 +111,13 @@ button{font:inherit;border:0;border-radius:11px;padding:11px 20px;font-weight:80
     </header>
     <div class="instruction">لطفاً اطلاعات گزینه‌های زیر را بررسی کنید و با توجه به ترجیحات خود، برای هر وسیله نقلیه یک اولویت مشخص کنید. اولویت ۱ به معنی بیشترین ترجیح و اولویت ۶ به معنی کمترین ترجیح است.</div>
     <section class="grid" id="cards"></section>
+    <div class="instruction" style="margin-top:8px">اکنون با توجه به اطلاعاتی که در شش گزینه بالا مشاهده کردید، اولویت هر گزینه را در جدول زیر مشخص کنید.</div>
+    <div class="rank-table-wrap">
+      <table class="rank-table">
+        <thead><tr><th>شیوه حمل‌ونقل</th><th>اولویت</th></tr></thead>
+        <tbody id="scenarioRankRows"></tbody>
+      </table>
+    </div>
     <footer class="actions">
       <button class="clear" id="clearBtn" type="button">پاک کردن انتخاب‌ها</button>
       <div class="status" id="status">۰ از ۶ اولویت انتخاب شده<small>برای ادامه، هر شش گزینه را رتبه‌بندی کنید.</small></div>
@@ -157,17 +177,16 @@ const fmt = n => n == null ? "—" : Number(n).toLocaleString("en-US").replace(/
 let current = 0;
 let answers = JSON.parse(localStorage.getItem("transportSurveyAnswers") || "{}");
 const cards = document.getElementById("cards");
+function getParticipantName(){ return document.querySelector('input[name="interviewerName"]:checked')?.value || ""; }
 function render(){
   const scenario = DATA[current];
   document.getElementById("scenarioTitle").textContent = `سناریوی شماره ${faDigits(scenario.scenario)}`;
   document.getElementById("counter").textContent = `${faDigits(current+1)} از ${faDigits(DATA.length)}`;
   document.getElementById("progressBar").style.width = `${((current+1)/DATA.length)*100}%`;
   cards.innerHTML = "";
-  scenario.items.forEach((item,idx)=>{
-    const selected = (answers[current]||{})[item.mode] || "";
+  scenario.items.forEach(item=>{
     const cost = item.fuel != null ? fmt(item.fuel) : fmt(item.fare);
     const costLabel = item.fuel != null ? "هزینه سوخت" : "هزینه سفر";
-    const maintLabel = item.maintenance != null ? "هزینه نگهداری" : "هزینه نگهداری";
     const div = document.createElement("article");
     div.className="card";
     div.innerHTML = `
@@ -176,27 +195,31 @@ function render(){
       <div class="details">
         <div class="row"><span class="label">${costLabel}</span><span class="value">${cost}</span></div>
         <div class="row"><span class="label">زمان سفر</span><span class="value">${faDigits(item.time)} دقیقه</span></div>
-        <div class="row"><span class="label">${maintLabel}</span><span class="value">${fmt(item.maintenance)}</span></div>
-      </div>
-      <div class="pick"><label for="rank-${idx}">انتخاب اولویت</label>
-        <select id="rank-${idx}" data-mode="${item.mode}">
-          <option value="">انتخاب اولویت</option>
-          ${[1,2,3,4,5,6].map(n=>`<option value="${n}">${faDigits(n)}${n===1?" - بیشترین ترجیح":n===6?" - کمترین ترجیح":""}</option>`).join("")}
-        </select>
+        <div class="row"><span class="label">هزینه نگهداری</span><span class="value">${fmt(item.maintenance)}</span></div>
       </div>`;
     cards.appendChild(div);
-    const select=div.querySelector("select");
-    select.value=selected;
+  });
+  const rankRows = document.getElementById("scenarioRankRows");
+  rankRows.innerHTML = "";
+  scenario.items.forEach((item,idx)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${item.name}</td><td><select aria-label="اولویت ${item.name}" data-mode="${item.mode}">
+      <option value="">انتخاب اولویت</option>
+      ${[1,2,3,4,5,6].map(n=>`<option value="${n}">${faDigits(n)}${n===1?" - بیشترین ترجیح":n===6?" - کمترین ترجیح":""}</option>`).join("")}
+    </select></td>`;
+    rankRows.appendChild(tr);
+    const select=tr.querySelector("select");
+    select.value=(answers[current]||{})[item.mode]||"";
     select.addEventListener("change",e=>{
       if(!answers[current]) answers[current]={};
       const mode=e.target.dataset.mode, value=e.target.value;
       if(value){
-        const conflict=Object.entries(answers[current]).find(([m,v])=>m!==mode && v===value);
+        const conflict=Object.entries(answers[current]).find(([m,v])=>m!==mode && String(v)===value);
         if(conflict){
           alert(`اولویت ${faDigits(value)} قبلاً برای «${DATA[current].items.find(x=>x.mode===conflict[0]).name}» انتخاب شده است. لطفاً اولویت دیگری انتخاب کنید.`);
           e.target.value="";
           delete answers[current][mode];
-        } else answers[current][mode]=value;
+        } else answers[current][mode]=Number(value);
       } else delete answers[current][mode];
       save(); updateStatus();
     });
@@ -336,7 +359,7 @@ document.getElementById("submitBtn").onclick = async () => {
         "Prefer": "return=minimal"
       },
       body: JSON.stringify({
-        participant_name: document.getElementById("participantName").value.trim(),
+        participant_name: getParticipantName(),
         answers: DATA.map((scenario,i)=>({
           scenario: scenario.scenario,
           rankings: scenario.items.map(item=>({
@@ -373,7 +396,7 @@ document.getElementById("submitBtn").onclick = async () => {
 };
 function csvEscape(v){return '"'+String(v??"").replace(/"/g,'""')+'"'}
 document.getElementById("downloadBtn").onclick=()=>{
-  const participantName=document.getElementById("participantName").value.trim();
+  const participantName=getParticipantName();
   const rows=[["participant_name","section","scenario_or_fuel_price","mode_en","mode_fa","rank","cost_type","cost_toman","maintenance_toman","travel_time_min"]];
   DATA.forEach((s,i)=>s.items.forEach(item=>{
     rows.push([participantName,"scenario",s.scenario,item.mode,item.name,(answers[i]||{})[item.mode]||"",item.fuel!=null?"fuel":"fare",item.fuel??item.fare??"",item.maintenance??"",item.time]);
@@ -388,7 +411,7 @@ document.getElementById("downloadBtn").onclick=()=>{
 };
 document.getElementById("restartBtn").onclick=()=>{
   if(confirm("پاسخ‌های ذخیره‌شده در این مرورگر پاک و پرسشنامه از ابتدا شروع شود؟")){
-    answers={};current=0;fuelPreferences={};fuelCurrent=0;save();saveFuel();document.getElementById("complete").classList.add("hidden");document.getElementById("intro").classList.remove("hidden");document.getElementById("profile").classList.add("hidden");document.getElementById("survey").classList.add("hidden");document.getElementById("fuelSection").classList.add("hidden");document.getElementById("participantName").value="";render();window.scrollTo({top:0,behavior:"smooth"});
+    answers={};current=0;fuelPreferences={};fuelCurrent=0;save();saveFuel();document.getElementById("complete").classList.add("hidden");document.getElementById("intro").classList.remove("hidden");document.getElementById("profile").classList.add("hidden");document.getElementById("survey").classList.add("hidden");document.getElementById("fuelSection").classList.add("hidden");document.querySelectorAll('input[name="interviewerName"]').forEach(el=>el.checked=false);render();window.scrollTo({top:0,behavior:"smooth"});
   }
 };
 document.getElementById("startBtn").addEventListener("click",()=>{
@@ -397,11 +420,10 @@ document.getElementById("startBtn").addEventListener("click",()=>{
   window.scrollTo({top:0,behavior:"smooth"});
 });
 document.getElementById("beginScenariosBtn").addEventListener("click",()=>{
-  const nameInput = document.getElementById("participantName");
+  const interviewerName = getParticipantName();
   const error = document.getElementById("profileError");
-  if (!nameInput.value.trim()) {
+  if (!interviewerName) {
     error.classList.remove("hidden");
-    nameInput.focus();
     return;
   }
   error.classList.add("hidden");
